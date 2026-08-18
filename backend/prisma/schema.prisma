@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  team_member
+  supervisor
+  head_of_maintenance
+  maintenance_manager
+  owner
+}
+
+enum ContractType {
+  three_month
+  yearly
+}
+
+enum TicketType {
+  standard
+  emergency
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+}
+
+enum VisitStatus {
+  completed
+  needs_followup
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  team         Team?    @relation(fields: [teamId], references: [id])
+  teamId       String?
+  createdAt    DateTime @default(now())
+
+  assignedTickets Ticket[] @relation("AssignedTickets")
+}
+
+model Team {
+  id         String   @id @default(uuid())
+  name       String
+  vehicleReg String
+  members    User[]
+  clients    Client[]
+  visits     Visit[]
+  createdAt  DateTime @default(now())
+}
+
+model Client {
+  id               String        @id @default(uuid())
+  name             String
+  contactEmail     String?
+  contactPhone     String?
+  address          String
+  contractType     ContractType
+  contractStart    DateTime
+  visitFrequency   String        @default("weekly")
+  team             Team?         @relation(fields: [teamId], references: [id])
+  teamId           String?
+  gardenProfile    GardenProfile?
+  visits           Visit[]
+  tickets          Ticket[]
+  payments         Payment[]
+  createdAt        DateTime      @default(now())
+}
+
+model GardenProfile {
+  id                    String   @id @default(uuid())
+  client                Client   @relation(fields: [clientId], references: [id])
+  clientId              String   @unique
+  size                  String?
+  shape                 String?
+  theme                 String?
+  valuablePlants        String[] // e.g. ["olive tree", "palm tree"]
+  specialTreatmentNotes String?
+}
+
+model Visit {
+  id                String      @id @default(uuid())
+  client            Client      @relation(fields: [clientId], references: [id])
+  clientId          String
+  team              Team        @relation(fields: [teamId], references: [id])
+  teamId            String
+  date              DateTime    @default(now())
+  referencePhotoUrl String?
+  videoUrl          String?
+  notes             String?
+  status            VisitStatus @default(completed)
+  tickets           Ticket[]
+  report            ClientReport?
+  createdAt         DateTime    @default(now())
+}
+
+model Ticket {
+  id         String       @id @default(uuid())
+  client     Client       @relation(fields: [clientId], references: [id])
+  clientId   String
+  visit      Visit?       @relation(fields: [visitId], references: [id])
+  visitId    String?
+  raisedBy   String       // "team_member" | "client" — kept as string for Phase 1 simplicity
+  type       TicketType   @default(standard)
+  status     TicketStatus @default(open)
+  assignedTo User?        @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  assignedToId String?
+  createdAt  DateTime     @default(now())
+  resolvedAt DateTime?
+}
+
+model ClientReport {
+  id             String   @id @default(uuid())
+  visit          Visit    @relation(fields: [visitId], references: [id])
+  visitId        String   @unique
+  content        String
+  generatedAt    DateTime @default(now())
+  deliveredAt    DateTime?
+  deliveryChannel String? // "in_app" | "email" | "whatsapp"
+}
+
+model Payment {
+  id                String   @id @default(uuid())
+  client            Client   @relation(fields: [clientId], references: [id])
+  clientId          String
+  amount            Decimal
+  status            String   // "pending" | "paid" | "failed"
+  providerReference String?
+  createdAt         DateTime @default(now())
+}

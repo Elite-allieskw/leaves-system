@@ -1,0 +1,24 @@
+# Local development database — no account, no cloud signup needed.
+# Run: docker compose up -d
+# This matches DATABASE_URL in backend/.env.example exactly, so the default
+# .env works with zero changes once you `cp .env.example .env`.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: leaves_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - leaves_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d leaves_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  leaves_db_data:

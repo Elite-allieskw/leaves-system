@@ -1,0 +1,86 @@
+# Render Blueprint — deploys the Leaves staging environment in one go.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# This defines three resources: the backend API, the web dashboard (static site),
+# and a managed PostgreSQL database. See STAGING_DEPLOY.md for the step-by-step
+# process — a couple of values below (CORS_ORIGIN, VITE_API_BASE_URL) can only be
+# filled in AFTER the first deploy, once Render has assigned each service a URL.
+
+databases:
+  - name: leaves-db
+    plan: free
+    databaseName: leaves
+    user: leaves
+
+services:
+  - type: web
+    name: leaves-backend
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: "cd backend && npm install && npx prisma generate && npm run build"
+    startCommand: "cd backend && npx prisma migrate deploy && npm start"
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: leaves-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PORT
+        value: "4000"
+      # Update this to the leaves-web URL after the frontend's first deploy,
+      # then redeploy the backend. Starts permissive so the first deploy succeeds.
+      - key: CORS_ORIGIN
+        value: "*"
+      # Object storage (photos/videos) — sync: false means Render will prompt
+      # you to fill these in rather than deploying with a blank value. Leave
+      # them blank to use the local-disk fallback for an initial smoke test,
+      # but fill these in before logging real client visits (see README).
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        value: "auto"
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PUBLIC_URL_BASE
+        sync: false
+      # Ticket notifications — leave blank to fall back to console logging
+      # (visible in the Render service logs), or fill in for real email alerts.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: NOTIFY_FROM_EMAIL
+        value: "no-reply@leaves.test"
+      - key: NOTIFY_TICKETS_TO_EMAIL
+        sync: false
+
+  - type: web
+    name: leaves-web
+    runtime: static
+    plan: free
+    rootDir: .
+    buildCommand: "cd web && npm install && npm run build"
+    staticPublishPath: web/dist
+    envVars:
+      # Set this to the leaves-backend URL (e.g. https://leaves-backend.onrender.com)
+      # after the backend's first deploy, then redeploy the frontend.
+      - key: VITE_API_BASE_URL
+        value: "https://REPLACE-WITH-BACKEND-URL.onrender.com"
+    routes:
+      # Client-side routing (React Router) — unknown paths fall back to index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -1,0 +1,170 @@
+/*
+  Leaves brand theme
+  Source: brand notes derived from Instagram @leaveskw (see /claude/leaves-brand-notes.md in the project)
+  Primary: deep forest/emerald green from the logo + team uniforms.
+  Supporting colors pulled from their photography (sand, sky, terracotta, wood) — used sparingly, as accents only.
+*/
+
+:root {
+  /* Brand */
+  --leaves-green-900: #123526;
+  --leaves-green-700: #1e5c3e;
+  --leaves-green-600: #1f6b45;
+  --leaves-green-500: #2a8058;
+  --leaves-green-100: #e7f2ec;
+  --leaves-green-50: #f4faf7;
+
+  /* Neutrals — warm, not corporate-cool */
+  --leaves-sand-100: #f4efe6;
+  --leaves-sand-300: #e4d9c4;
+  --leaves-ink: #22271f;
+  --leaves-grey-600: #5b6259;
+  --leaves-grey-300: #d8ddd4;
+  --leaves-white: #ffffff;
+
+  /* Accents — used only for data viz / status, never as primary chrome */
+  --leaves-sky: #4f96b5;
+  --leaves-terracotta: #c17a5a;
+  --leaves-wood: #8a6a4a;
+
+  /* Status */
+  --leaves-status-open: #b5533c;
+  --leaves-status-progress: #b98a2e;
+  --leaves-status-resolved: var(--leaves-green-600);
+  --leaves-status-emergency: #a5271e;
+
+  /* Semantic tokens */
+  --color-bg: var(--leaves-sand-100);
+  --color-surface: var(--leaves-white);
+  --color-text: var(--leaves-ink);
+  --color-text-muted: var(--leaves-grey-600);
+  --color-border: var(--leaves-grey-300);
+  --color-primary: var(--leaves-green-600);
+  --color-primary-hover: var(--leaves-green-700);
+  --color-primary-contrast: var(--leaves-white);
+  --color-accent-soft: var(--leaves-green-100);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-card: 0 1px 2px rgba(18, 53, 38, 0.06), 0 4px 12px rgba(18, 53, 38, 0.06);
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+h1, h2, h3 {
+  color: var(--leaves-green-900);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.15rem; margin: 24px 0 10px; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+th, td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.9rem;
+}
+th {
+  background: var(--color-accent-soft);
+  color: var(--leaves-green-900);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+tr:last-child td { border-bottom: none; }
+
+button, .btn {
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+button:hover, .btn:hover { background: var(--color-primary-hover); }
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--leaves-green-100);
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 20px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.badge-open { background: rgba(181, 83, 60, 0.12); color: var(--leaves-status-open); }
+.badge-in_progress { background: rgba(185, 138, 46, 0.14); color: var(--leaves-status-progress); }
+.badge-resolved { background: var(--leaves-green-100); color: var(--leaves-status-resolved); }
+.badge-emergency { background: rgba(165, 39, 30, 0.12); color: var(--leaves-status-emergency); }
