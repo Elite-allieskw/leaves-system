@@ -32,7 +32,7 @@ At this point the frontend is deployed but pointing at a placeholder backend URL
 3. Visit your `leaves-web` URL in a browser. You should land on the Leaves login page.
 
 ## Seed the first login
-The database is empty after a fresh deploy — there's no owner account yet. Render's free plan doesn't give you a persistent shell, so run the seed script as a **one-off job**:
+The database is empty after a fresh deploy — there's no owner account yet. `leaves-backend` runs on the Starter plan (see cost note below), which includes Shell access, so run the seed script as a **one-off job**:
 1. In the `leaves-backend` service → **Shell** tab (or **Jobs**, depending on your Render plan/UI version).
 2. Run: `cd backend && npm run prisma:seed`
 3. This creates the three test logins documented in the main README (`owner@leaves.test`, `supervisor@leaves.test`, `team@leaves.test`, all password `ChangeMe123!`). Log in as owner and use `POST /auth/users` (or a future admin UI) to create real accounts, then delete these test ones.
@@ -45,14 +45,17 @@ cd backend && npm run prisma:seed:demo
 This creates 15 **fictional** example clients (prefixed `[DEMO]`, not real Leaves data) with garden profiles, sample visits, and a few tickets — enough to click through every screen and confirm staging actually works end-to-end. Delete these before Leaves' real client data goes in.
 
 ## Set up object storage before uploading real photos/videos
-The backend supports S3/Cloudflare R2 (see the "Setting up photo/video storage" section in the main README), but falls back to local disk if no bucket is configured. **On Render, that fallback is not durable** — free web services have an ephemeral filesystem, so every redeploy wipes anything saved locally. Before logging real client visits in staging:
+The backend supports S3/Cloudflare R2 (see the "Setting up photo/video storage" section in the main README), but falls back to local disk if no bucket is configured. **On Render, that fallback is not durable** — web services have an ephemeral filesystem by default regardless of plan (Starter included; only an explicitly attached, separately-billed persistent Disk survives a redeploy), so every redeploy wipes anything saved locally. Before logging real client visits in staging:
 1. Provision an S3 or R2 bucket (README has both options).
 2. Add `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT` (R2 only), `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_PUBLIC_URL_BASE` to the `leaves-backend` service's Environment tab in Render.
 3. Redeploy `leaves-backend`. Test uploads will now persist properly.
 
+## Cost — this is no longer a fully free staging setup
+As of this writing (Aug 2026), Render's Blueprint schema rejects `plan: free` for any `type: web` service — it only accepts that on the free Postgres database. `render.yaml` now sets `leaves-backend` to the **Starter** plan, currently **$7/month** (512MB RAM, 0.5 CPU, always-on, no spin-down) — the cheapest paid tier and the least you can spend to deploy this Blueprint. `leaves-web` (the static site) is also set to `starter` to satisfy the same schema requirement, but static sites aren't compute-billed — Render docs describe them as having no instance type since they don't run server-side code — so this doesn't add a second charge. `leaves-db` stays on the free Postgres plan (see below). **Total: ~$7/month**, not $0. If Render changes this again, re-check the valid plan list with `render.yaml`'s validation error as ground truth over any docs/blog post, which can lag behind actual pricing changes.
+
 ## Known limitations of this staging setup — expected, not bugs
-- **Free-tier services spin down when idle** and take ~30–60 seconds to wake up on the next request. Fine for a staging/demo environment; upgrade the plan before this is client-facing.
-- **The database is on Render's free Postgres plan**, which expires after 90 days unless upgraded — a fine limit for a staging environment, not for anything long-lived.
+- **`leaves-backend` no longer spins down on idle** now that it's on Starter (that was a free-tier-only behavior) — it's always-on. `leaves-web`, being static, was never subject to spin-down either way.
+- **The database is on Render's free Postgres plan**, which expires **30 days** after creation unless upgraded, with a further 14-day grace period to upgrade before the data is actually deleted — a fine limit for a short staging trial, not for anything long-lived.
 
 ## Redeploying after future code changes
 Render redeploys automatically on every push to the connected branch — no extra steps needed beyond `git push`.

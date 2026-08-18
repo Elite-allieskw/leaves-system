@@ -7,6 +7,10 @@
 # filled in AFTER the first deploy, once Render has assigned each service a URL.
 
 databases:
+  # "free" is still a valid Postgres plan (1GB storage). Note: free Postgres
+  # instances expire 30 days after creation (a 14-day grace period to upgrade
+  # follows before data is deleted) — fine for an initial staging smoke test,
+  # not for anything you want to keep around. See STAGING_DEPLOY.md.
   - name: leaves-db
     plan: free
     databaseName: leaves
@@ -16,7 +20,12 @@ services:
   - type: web
     name: leaves-backend
     runtime: node
-    plan: free
+    # Render's Blueprint schema no longer accepts "free" as a plan for
+    # type: web services (confirmed via a live "no such plan free for
+    # service type web" sync error, Aug 2026) — "starter" is the cheapest
+    # available plan now, at $7/month (512MB RAM, 0.5 CPU, always-on, no
+    # spin-down). See STAGING_DEPLOY.md for what this changes.
+    plan: starter
     rootDir: .
     buildCommand: "cd backend && npm install && npx prisma generate && npm run build"
     startCommand: "cd backend && npx prisma migrate deploy && npm start"
@@ -70,7 +79,12 @@ services:
   - type: web
     name: leaves-web
     runtime: static
-    plan: free
+    # Same "free" plan removal as leaves-backend above — but static sites
+    # have no instance type/compute cost regardless of the plan value here
+    # (Render docs: static sites "do not perform server-side processing"),
+    # so this doesn't add a second $7/month charge. "starter" just satisfies
+    # the schema.
+    plan: starter
     rootDir: .
     buildCommand: "cd web && npm install && npm run build"
     staticPublishPath: web/dist

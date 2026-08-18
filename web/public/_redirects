@@ -1,0 +1,9 @@
+# Cloudflare Pages SPA fallback — this app uses React Router client-side
+# routing, so unknown paths (e.g. /clients/abc123 loaded directly, not
+# navigated to from within the app) need to fall through to index.html
+# rather than 404 from Cloudflare's static file server. Vite copies
+# everything in web/public/ into web/dist/ as-is at build time, so this
+# lands at the publish directory root where Cloudflare Pages expects it.
+# Equivalent to the `routes: [{type: rewrite, source: /*, destination:
+# /index.html}]` block in render.yaml for the Render deployment.
+/*  /index.html  200
