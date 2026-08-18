@@ -1,4 +1,4 @@
-# Deploying Leaves to Staging (Fly.io + Neon + Cloudflare Pages)
+# Deploying Leaves to Staging (Fly.io + Neon + Cloudflare Workers)
 
 `render.yaml` and `STAGING_DEPLOY.md` are untouched and still valid if you
 want to go back to an all-Render setup later. This is a parallel path, not a
@@ -23,7 +23,7 @@ tiers as of this writing (Aug 2026):
 |---|---|---|---|
 | Backend API | Fly.io | ~**$3.32–4/month** (512MB shared-cpu-1x, always-on, + negligible bandwidth) | **Yes**, to keep it running past the trial |
 | Database | [Neon](https://neon.tech) (Postgres) | Free (0.5GB storage, 100 compute-hours/month, autosuspends after 5 min idle) | No |
-| Frontend | [Cloudflare Pages](https://pages.cloudflare.com) (static hosting) | Free (unlimited bandwidth, 500 builds/month) | No |
+| Frontend | Cloudflare Workers (static assets) | Free (static assets are unlimited/unmetered even on the free plan, per [Cloudflare's own pricing docs](https://developers.cloudflare.com/workers/platform/pricing/); 3,000 Workers Builds minutes/month for auto-deploy-on-push) | No |
 
 **Total: ~$3.32–4/month**, not $0. That's actually *less* than Render's
 current $7/month Starter-plan backend (see `STAGING_DEPLOY.md`'s cost note),
@@ -41,18 +41,30 @@ the kind of stale-assumption trap the Render `plan: free` issue was — Fly's
 own docs and pricing page were the ground truth here, not older blog posts
 or training data describing an earlier, cheaper/freer Fly.io.
 
+**A second instance of the same lesson, mid-deploy**: this doc originally
+described Cloudflare **Pages**' classic dashboard flow (Connect to Git → fill
+in a Root directory/Build command/Build output directory form). That flow no
+longer exists — Cloudflare has been folding Pages into Workers throughout
+2025-2026, and "Create application" in the dashboard now only offers a
+Workers flow driven by `wrangler deploy` from the CLI, confirmed by actually
+hitting the dashboard rather than assuming the old flow still applied. Pages
+itself isn't gone (existing Pages projects still run), but there's no way to
+*create* one through the current UI anymore. This doc now reflects Workers
+with static assets instead — see Pass 3 below.
+
 ## Before you start
-- Push the latest commit to GitHub if you haven't (`git push`) — Cloudflare
-  Pages deploys from the connected repo; Fly deploys from your local machine
-  via the CLI (it doesn't need the repo pushed, but keeping it in sync is
-  good practice regardless).
+- Push the latest commit to GitHub if you haven't (`git push`) — needed for
+  the optional Workers Builds auto-deploy step in Pass 3, and good practice
+  regardless. Neither Fly nor a manual `wrangler deploy` actually require the
+  repo to be pushed (both deploy from your local working copy via CLI).
 - Install the Fly CLI (`flyctl`): see https://fly.io/docs/flyctl/install/ for
   your OS. Confirm with `fly version`.
 - Create a Fly.io account (`fly auth signup` or via the dashboard) — no card
   needed for this step itself, per the warning above.
 - Create a free Neon account at neon.tech — no card needed.
-- Create a free Cloudflare account at cloudflare.com if you don't have one
-  (for Pages) — no card needed.
+- Create a free Cloudflare account at cloudflare.com if you don't have one —
+  no card needed. `wrangler` (the CLI) is already a `devDependency` in
+  `web/package.json`, so no separate install step for it.
 
 ## Pass 1 — Database (Neon)
 1. In the Neon dashboard: **New Project**. Pick a region close to where the
@@ -88,8 +100,8 @@ or training data describing an earlier, cheaper/freer Fly.io.
    fly secrets set DATABASE_URL="<the Neon direct connection string from Pass 1>"
    fly secrets set JWT_SECRET="$(node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')"
    # Starts permissive so the first deploy succeeds — tighten this in the
-   # "wire them together" step below once the frontend's Cloudflare Pages
-   # URL exists.
+   # "wire them together" step below once the frontend's Workers URL
+   # exists.
    fly secrets set CORS_ORIGIN="*"
    ```
    Leave `S3_*` and `SMTP_*` unset for now (same reasoning as the Render
@@ -107,33 +119,73 @@ if it happens), you can instead run the migration manually:
 `fly ssh console -C "npx prisma migrate deploy"` from `backend/`, then
 `fly deploy` again without changing `release_command`.
 
-## Pass 3 — Frontend (Cloudflare Pages)
-1. In the Cloudflare dashboard: **Workers & Pages → Create → Pages → Connect
-   to Git**, select the `leaves-system` repo.
-2. Build settings:
+## Pass 3 — Frontend (Cloudflare Workers, static assets)
+There's no dashboard form for this step (see the note above) — it's CLI-first,
+then an optional dashboard step afterward to wire up auto-deploy-on-push.
+
+1. Authenticate `wrangler` to your Cloudflare account:
+   ```bash
+   cd web
+   npx wrangler login
+   ```
+   This opens a browser for sign-in, so it needs a real interactive
+   terminal — same constraint as `fly auth login` earlier. If you're running
+   this through an assistant/agent session without a real TTY, open a
+   separate terminal window yourself, run it there, and come back once
+   you're logged in (it writes to a local Wrangler config file, so any
+   terminal on the same machine can use it afterward — no need to re-paste
+   anything).
+2. Deploy, with the backend URL from Pass 2 set for the build to bake in:
+   ```bash
+   cd web
+   VITE_API_BASE_URL="https://<your-app-name>.fly.dev" npx wrangler deploy
+   ```
+   (Windows PowerShell: `$env:VITE_API_BASE_URL="https://<your-app-name>.fly.dev"; npx wrangler deploy`)
+
+   This is different from the old Pages flow: there's no dashboard field for
+   `VITE_API_BASE_URL` — it has to be a real shell environment variable
+   *when you run this command*, because `web/wrangler.toml`'s `[build]`
+   section runs `npm install && npm run build` as a subprocess that inherits
+   it, and Vite bakes `VITE_*` vars into the bundle at that build step, not
+   at request time. No trailing slash, no `/api` suffix — the frontend
+   appends paths like `/clients` directly to this.
+3. `wrangler` prints the deployed URL when it finishes — something like
+   `https://leaves-web.<your-subdomain>.workers.dev`. Note it for the next
+   step.
+4. SPA routing (React Router's client-side routes falling back to
+   `index.html` instead of 404ing) is handled by `not_found_handling =
+   "single-page-application"` in `web/wrangler.toml` — already in the repo,
+   no extra step needed.
+
+### Optional — auto-deploy on every push (Workers Builds)
+The CLI deploy above is a one-shot snapshot, not a standing connection to
+GitHub. To get the Render/Pages-style "push to main, it redeploys itself"
+behavior, connect the repo *after* the Worker exists from step 2 above:
+1. In the Cloudflare dashboard, open the `leaves-web` Worker you just
+   created → **Settings → Builds → Connect**.
+2. Follow the prompts to authorize Cloudflare's GitHub App and select the
+   `leaves-system` repo.
+3. Set the build configuration:
    - **Root directory**: `web`
-   - **Build command**: `npm install && npm run build`
-   - **Build output directory**: `dist`
-3. Before the first build, add an environment variable (**Settings →
-   Environment variables**, for the Production environment):
-   - `VITE_API_BASE_URL` = `https://<your-app-name>.fly.dev` (the backend URL
-     from Pass 2, **no trailing slash, no `/api` suffix** — the frontend
-     appends paths like `/clients` directly to this)
-4. Trigger the deploy (or it runs automatically after you connect the repo).
-   Note the resulting `*.pages.dev` URL once it's live.
-5. `web/public/_redirects` (already in the repo) handles React Router's
-   client-side routes falling back to `index.html` — no extra Cloudflare
-   config needed for that part.
+   - **Build command**: `npm install && npm run build` (or leave it to
+     `wrangler deploy`, which already runs this via `[build]` in
+     `wrangler.toml` — check whichever field Cloudflare's UI actually shows
+     you at this point, since this is the part most likely to keep shifting)
+   - **Deploy command**: `npx wrangler deploy`
+4. Add `VITE_API_BASE_URL` as a build-time environment variable here too —
+   same value as step 2 above. Unlike the CLI deploy, this dashboard form
+   *does* have a proper env var field for it, since Cloudflare controls the
+   build environment here.
 
 ## Wire them together
 1. Back on Fly: tighten CORS to the real frontend URL from Pass 3:
    ```bash
    cd backend
-   fly secrets set CORS_ORIGIN="https://<your-project>.pages.dev"
+   fly secrets set CORS_ORIGIN="https://leaves-web.<your-subdomain>.workers.dev"
    ```
    Setting a secret triggers an automatic redeploy.
-2. Visit your Cloudflare Pages URL in a browser. You should land on the
-   Leaves login page.
+2. Visit your Workers URL in a browser. You should land on the Leaves login
+   page.
 
 ## Seed the first login
 The database is empty after Pass 1/2 — no owner account yet. SSH into the
@@ -180,18 +232,22 @@ separate manual redeploy step needed.
   enough for a real 120-client production dataset. Revisit before going
   further than staging.
 - **Fly's backend filesystem is ephemeral** (see storage section above).
-- **Cloudflare Pages' free tier allows one custom domain per account** — fine
-  for a `*.pages.dev` staging URL, revisit if you want a branded staging
-  domain alongside a future production one.
+- **Cloudflare's dashboard flow for this keeps changing** (Pages → Workers
+  mid-project, in this case). If the Workers Builds dashboard steps above
+  don't match what you see, that's the next iteration of the same shift —
+  re-verify against Cloudflare's current docs rather than trusting this file
+  blindly, same as the Fly/Render notes elsewhere in this doc.
 - **This entire setup needs a card on file with Fly**, per the warning at the
   top of this doc — there's no way around that for an always-on backend
   beyond the 7-day trial.
 
 ## Redeploying after future code changes
 - **Backend**: `cd backend && fly deploy` — not automatic; Fly doesn't watch
-  your GitHub repo the way Render/Cloudflare Pages do unless you separately
-  set up GitHub Actions for it (out of scope here, but worth doing before
-  this is more than a personal staging loop — see
+  your GitHub repo the way Render does unless you separately set up GitHub
+  Actions for it (out of scope here, but worth doing before this is more
+  than a personal staging loop — see
   https://fly.io/docs/launch/continuous-deployment-with-github-actions/).
-- **Frontend**: automatic — Cloudflare Pages redeploys on every push to the
-  connected branch once it's set up, same as Render's static site.
+- **Frontend**: `cd web && VITE_API_BASE_URL="..." npx wrangler deploy` —
+  also not automatic unless you did the optional Workers Builds step in
+  Pass 3, in which case it redeploys on every push to the connected branch,
+  same as Render's static site used to.

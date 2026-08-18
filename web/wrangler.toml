@@ -1,0 +1,28 @@
+# Cloudflare Workers config for the Leaves frontend — deployed as a
+# static-assets-only Worker, not the older Pages product. Cloudflare folded
+# Pages' dashboard-driven "connect a repo, fill in build settings" flow into
+# Workers as of 2026; "Create application" in the dashboard now points at
+# `wrangler deploy` instead. See FLY_DEPLOY.md for the full walkthrough,
+# including the separate "Workers Builds" dashboard step for GitHub
+# auto-deploy (the actual equivalent of what Pages' git integration used to
+# do in one step).
+#
+# `name` below determines the default URL:
+# <name>.<your-workers-subdomain>.workers.dev — wrangler will print the real
+# URL after the first deploy.
+name = "leaves-web"
+compatibility_date = "2026-08-18"
+
+# Runs automatically as part of `wrangler deploy`, so a plain `wrangler
+# deploy` from this directory is enough — no separate manual build step.
+[build]
+command = "npm install && npm run build"
+
+[assets]
+directory = "./dist"
+# SPA fallback: unmatched paths (e.g. /clients/abc123 loaded directly, not
+# navigated to from within the app) serve index.html instead of 404'ing.
+# This replaces the Pages-era `_redirects` file convention, which Workers
+# static assets doesn't use — see web/public/_redirects' removal in the
+# same commit as this file.
+not_found_handling = "single-page-application"
